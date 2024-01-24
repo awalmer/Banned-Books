@@ -11,6 +11,7 @@ library(tidyverse)
 library(dplyr)
 library(stringr)
 library(plyr)
+library(data.table)
 setwd("/Volumes/AuraByte3/Data Projects/Banned Books in U.S.")
 
 # Data Import
@@ -136,3 +137,60 @@ sum(is.na(data_tm_aw_estcounty$County_merge)) #2936
 
 # 2134 rows of estimated counties filled in.
 #-------------------------------------------------------------------------------
+
+
+
+## Prep a data frame for uploading to Flourish
+
+data_tm_aw_estcounty <- join(data_tm_aw_estcounty, 
+     decision_mapping[c("Decision","Decision_Simplified")], 
+     by=c("Decision"))
+
+flourish_counties <- read.csv("U.S. County Data/FlourishBaseMap_USCountyRegionData.csv")
+flourish_counties$county_state <- paste(flourish_counties$NAME, flourish_counties$STUSPS)
+flourish_counties[duplicated(flourish_counties$county_state)==TRUE,] # 6 to remove
+flourish_counties <- flourish_counties[!duplicated(flourish_counties$county_state),]
+
+data_tm_aw_estcounty$ID_county_state <- ifelse(!is.na(data_tm_aw_estcounty$County_merge),
+                                               paste(data_tm_aw_estcounty$County_merge, data_tm_aw_estcounty$State),
+                                               NA)
+  
+data_tm_aw_estcounty <- left_join(data_tm_aw_estcounty, flourish_counties, 
+                             by = c("ID_county_state" = "county_state"))
+
+write.csv(data_tm_aw_estcounty,"bookchallenge_county_estimations.csv", 
+          row.names=FALSE, fileEncoding="UTF-8", na="")
+
+## May need to group data set:
+# sum of banned books per county, sum of overturned challenges per county, sum of unkown/unrelated changes
+
+
+data_tm_aw_estcounty %>%
+  gather(State, County, Decision_Simplified) %>%
+  group_by(State, County, Decision_Simplified) %>%
+  summarise (n = n()) %>%
+  mutate(freq = n / sum(n))
+
+data_tm_aw_estcounty %>%
+  group_by(State, County_merge) %>%
+  summarize(outcome_freq=n(Decision_Simplified))
+
+n(data_tm_aw_estcounty$Decision_Simplified)
+
+
+table(data_tm_aw_estcounty$Decision_Simplified, useNA = "ifany") # Public: 994; School: 11037; NA: 171
+
+data_tm_aw_estcounty %>%
+  count(State, County, data_tm_aw_estcounty$Decision_Simplified, sort = TRUE)
+
+temp <- setDT(data_tm_aw_estcounty)
+temp <- temp[, .N, by = .(State, STATE_NAME, STATEFP, County_merge, COUNTYFIPS,
+                          NAMELSAD,
+                          Decision_Simplified #, Overseeing_Agency_ISD_full
+                          )]
+
+temp <- temp[order(c(State, County_merge, Decision_Simplified))]
+temp <- temp[order(c(-N))]
+#temp <- temp[order(c(Overseeing_Agency_ISD_full))]
+
+# separate data sets by year?
