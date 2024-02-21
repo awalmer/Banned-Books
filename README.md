@@ -1,4 +1,4 @@
-# Banned-Books
+# Book Censorship in the U.S.
 
 Documentation…. 👇
 
